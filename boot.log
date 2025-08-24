@@ -1,4 +1,14 @@
-Boot script started at Mon Aug 18 19:27:04 CDT 2025
+Boot script started at Sat Aug 23 01:26:00 CDT 2025
 Changed directory to myjimjim
+[32m[PM2] [39mSpawning PM2 daemon with pm2_home=/data/data/com.termux/files/home/.pm2
+[32m[PM2] [39mPM2 Successfully daemonized
+[32m[PM2] [39mStarting /data/data/com.termux/files/home/myjimjim/index.js in fork_mode (1 instance)
+(node:19608) [DEP0176] DeprecationWarning: fs.R_OK is deprecated, use fs.constants.R_OK instead
+(Use `node --trace-deprecation ...` to show where the warning was created)
+[32m[PM2] [39mDone.
+┌────┬─────────────┬─────────────┬─────────┬─────────┬──────────┬────────┬──────┬───────────┬──────────┬──────────┬──────────┬──────────┐
+│ id │ name        │ namespace   │ version │ mode    │ pid      │ uptime │ ↺    │ status    │ cpu      │ mem      │ user     │ watching │
+├────┼─────────────┼─────────────┼─────────┼─────────┼──────────┼────────┼──────┼───────────┼──────────┼──────────┼──────────┼──────────┤
+│ [1m[36m0[39m[22m  │ myjimjim    │ default     │ 1.0.0   │ [7m[1mfork[22m[27m    │ 20130    │ 0s     │ 0    │ [32m[1monline[22m[39m    │ 0%       │ 47.2mb   │ [1mu0_a623[22m  │ [90mdisabled[39m │
+└────┴─────────────┴─────────────┴─────────┴─────────┴──────────┴────────┴──────┴───────────┴──────────┴──────────┴──────────┴──────────┘
 Started node index.js
-Server listening at http://localhost:8080
