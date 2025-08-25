@@ -229,10 +229,35 @@ wss.on('connection', (ws, req) => {
   }
 
   console.log('Client connected');
+  
+  // Send welcome message
+  ws.send(JSON.stringify({ 
+    sender: 'System', 
+    message: 'Connected to Gemini Chat Server. Type /help for available commands.' 
+  }));
 
   let history = [];
 
+  // Start Gemini process with error handling
   const gemini = spawn('gemini', ['-i']);
+
+  gemini.on('error', (error) => {
+    console.error('Failed to start Gemini process:', error);
+    ws.send(JSON.stringify({ 
+      sender: 'System', 
+      message: 'Failed to start Gemini process. Make sure Gemini CLI is installed and available in PATH.\nError: ' + error.message 
+    }));
+  });
+
+  gemini.on('exit', (code, signal) => {
+    if (code !== 0) {
+      console.error(`Gemini process exited with code ${code}, signal ${signal}`);
+      ws.send(JSON.stringify({ 
+        sender: 'System', 
+        message: `Gemini process exited unexpectedly (code: ${code}, signal: ${signal})` 
+      }));
+    }
+  });
 
   gemini.stdout.on('data', (data) => {
     const geminiMessage = { sender: 'Gemini', message: data.toString() };
@@ -340,7 +365,15 @@ wss.on('connection', (ws, req) => {
 
   ws.on('close', () => {
     console.log('Client disconnected');
-    gemini.kill();
+    if (gemini && !gemini.killed) {
+      gemini.kill('SIGTERM');
+      // Force kill after 5 seconds if still running
+      setTimeout(() => {
+        if (!gemini.killed) {
+          gemini.kill('SIGKILL');
+        }
+      }, 5000);
+    }
   });
 });
 
