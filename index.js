@@ -28,6 +28,7 @@ const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 const config = JSON.parse(fs.readFileSync(path.join(__dirname, 'config.json'), 'utf8'));
 const port = config.port;
+const host = config.host || '0.0.0.0';
 
 app.use((req, res, next) => {
   if (req.path === '/') return next();
@@ -250,7 +251,7 @@ wss.on('connection', (ws, req) => {
       const [command, ...args] = messageString.substring(1).split(' ');
       switch (command) {
         case 'help':
-          ws.send(JSON.stringify({ sender: 'System', message: 'Available commands:\n/help - Show this help message\n/logs - Show the last 20 lines of the server log\n/restart - Restart the server\n/load <filename> - Load a file into the chat\n/save <filename> - Save the chat history to a file' }));
+          ws.send(JSON.stringify({ sender: 'System', message: 'Available commands:\n/help - Show this help message\n/logs - Show the last 20 lines of the server log\n/restart - Restart the server\n/load <filename> - Load a file into the chat\n/save <filename> - Save the chat history to a file\n/status - Show server uptime and memory usage\n/exec <command> - Execute a system command (use with caution)' }));
           break;
         case 'logs':
           fs.readFile(path.join(__dirname, 'server.log'), 'utf8', (err, data) => {
@@ -290,7 +291,42 @@ wss.on('connection', (ws, req) => {
             ws.send(JSON.stringify(fileContent));
           });
           break;
-        case 'save':          if (args.length === 0) {            ws.send(JSON.stringify({ sender: 'System', message: 'Please provide a filename.' }));            return;          }          const saveFilename = args[0];          fs.writeFile(path.join(__dirname, saveFilename), JSON.stringify(history, null, 2), (err) => {            if (err) {              ws.send(JSON.stringify({ sender: 'System', message: `Error saving file: ${saveFilename}` }));              console.error(err);              return;            }            ws.send(JSON.stringify({ sender: 'System', message: `Chat history saved to: ${saveFilename}` }));          });          break;        case 'status':          const uptime = process.uptime();          const memoryUsage = process.memoryUsage();          ws.send(JSON.stringify({ sender: 'System', message: `Server uptime: ${uptime.toFixed(2)}s\nMemory usage: ${JSON.stringify(memoryUsage)}` }));          break;
+        case 'save':
+          if (args.length === 0) {
+            ws.send(JSON.stringify({ sender: 'System', message: 'Please provide a filename.' }));
+            return;
+          }
+          const saveFilename = args[0];
+          fs.writeFile(path.join(__dirname, saveFilename), JSON.stringify(history, null, 2), (err) => {
+            if (err) {
+              ws.send(JSON.stringify({ sender: 'System', message: `Error saving file: ${saveFilename}` }));
+              console.error(err);
+              return;
+            }
+            ws.send(JSON.stringify({ sender: 'System', message: `Chat history saved to: ${saveFilename}` }));
+          });
+          break;
+        case 'status':
+          const uptime = process.uptime();
+          const memoryUsage = process.memoryUsage();
+          ws.send(JSON.stringify({ sender: 'System', message: `Server uptime: ${uptime.toFixed(2)}s\nMemory usage: ${JSON.stringify(memoryUsage)}` }));
+          break;
+        case 'exec':
+          if (args.length === 0) {
+            ws.send(JSON.stringify({ sender: 'System', message: 'Please provide a command to execute.' }));
+            return;
+          }
+          const execCommand = args.join(' ');
+          const { exec } = require('child_process');
+          exec(execCommand, { timeout: 10000 }, (error, stdout, stderr) => {
+            if (error) {
+              ws.send(JSON.stringify({ sender: 'System', message: `Command failed: ${error.message}` }));
+              return;
+            }
+            const output = stdout || stderr || 'Command executed successfully (no output)';
+            ws.send(JSON.stringify({ sender: 'System', message: `Command output:\n${output}` }));
+          });
+          break;
         default:
           ws.send(JSON.stringify({ sender: 'System', message: `Unknown command: ${command}` }));
       }
@@ -308,6 +344,6 @@ wss.on('connection', (ws, req) => {
   });
 });
 
-server.listen(port, () => {
-  console.log(`Server listening at http://localhost:${port}`);
+server.listen(port, host, () => {
+  console.log(`Server listening at http://${host}:${port}`);
 });

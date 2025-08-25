@@ -23,3 +23,4 @@
 2025-08-19T20:16:42.856Z [LOG] Client connected
 2025-08-19T20:17:35.505Z [LOG] Client disconnected
 2025-08-23T06:26:21.667Z [LOG] Server listening at http://localhost:8080
+2025-08-25T02:02:26.768Z [LOG] Server listening at http://0.0.0.0:8080
