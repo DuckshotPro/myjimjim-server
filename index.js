@@ -28,6 +28,7 @@ const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 const config = JSON.parse(fs.readFileSync(path.join(__dirname, 'config.json'), 'utf8'));
 const port = config.port;
+const host = config.host || '0.0.0.0';
 
 app.use((req, res, next) => {
   if (req.path === '/') return next();
@@ -228,10 +229,35 @@ wss.on('connection', (ws, req) => {
   }
 
   console.log('Client connected');
+  
+  // Send welcome message
+  ws.send(JSON.stringify({ 
+    sender: 'System', 
+    message: 'Connected to Gemini Chat Server. Type /help for available commands.' 
+  }));
 
   let history = [];
 
+  // Start Gemini process with error handling
   const gemini = spawn('gemini', ['-i']);
+
+  gemini.on('error', (error) => {
+    console.error('Failed to start Gemini process:', error);
+    ws.send(JSON.stringify({ 
+      sender: 'System', 
+      message: 'Failed to start Gemini process. Make sure Gemini CLI is installed and available in PATH.\nError: ' + error.message 
+    }));
+  });
+
+  gemini.on('exit', (code, signal) => {
+    if (code !== 0) {
+      console.error(`Gemini process exited with code ${code}, signal ${signal}`);
+      ws.send(JSON.stringify({ 
+        sender: 'System', 
+        message: `Gemini process exited unexpectedly (code: ${code}, signal: ${signal})` 
+      }));
+    }
+  });
 
   gemini.stdout.on('data', (data) => {
     const geminiMessage = { sender: 'Gemini', message: data.toString() };
@@ -250,7 +276,7 @@ wss.on('connection', (ws, req) => {
       const [command, ...args] = messageString.substring(1).split(' ');
       switch (command) {
         case 'help':
-          ws.send(JSON.stringify({ sender: 'System', message: 'Available commands:\n/help - Show this help message\n/logs - Show the last 20 lines of the server log\n/restart - Restart the server\n/load <filename> - Load a file into the chat\n/save <filename> - Save the chat history to a file' }));
+          ws.send(JSON.stringify({ sender: 'System', message: 'Available commands:\n/help - Show this help message\n/logs - Show the last 20 lines of the server log\n/restart - Restart the server\n/load <filename> - Load a file into the chat\n/save <filename> - Save the chat history to a file\n/status - Show server uptime and memory usage\n/exec <command> - Execute a system command (use with caution)' }));
           break;
         case 'logs':
           fs.readFile(path.join(__dirname, 'server.log'), 'utf8', (err, data) => {
@@ -290,7 +316,42 @@ wss.on('connection', (ws, req) => {
             ws.send(JSON.stringify(fileContent));
           });
           break;
-        case 'save':          if (args.length === 0) {            ws.send(JSON.stringify({ sender: 'System', message: 'Please provide a filename.' }));            return;          }          const saveFilename = args[0];          fs.writeFile(path.join(__dirname, saveFilename), JSON.stringify(history, null, 2), (err) => {            if (err) {              ws.send(JSON.stringify({ sender: 'System', message: `Error saving file: ${saveFilename}` }));              console.error(err);              return;            }            ws.send(JSON.stringify({ sender: 'System', message: `Chat history saved to: ${saveFilename}` }));          });          break;        case 'status':          const uptime = process.uptime();          const memoryUsage = process.memoryUsage();          ws.send(JSON.stringify({ sender: 'System', message: `Server uptime: ${uptime.toFixed(2)}s\nMemory usage: ${JSON.stringify(memoryUsage)}` }));          break;
+        case 'save':
+          if (args.length === 0) {
+            ws.send(JSON.stringify({ sender: 'System', message: 'Please provide a filename.' }));
+            return;
+          }
+          const saveFilename = args[0];
+          fs.writeFile(path.join(__dirname, saveFilename), JSON.stringify(history, null, 2), (err) => {
+            if (err) {
+              ws.send(JSON.stringify({ sender: 'System', message: `Error saving file: ${saveFilename}` }));
+              console.error(err);
+              return;
+            }
+            ws.send(JSON.stringify({ sender: 'System', message: `Chat history saved to: ${saveFilename}` }));
+          });
+          break;
+        case 'status':
+          const uptime = process.uptime();
+          const memoryUsage = process.memoryUsage();
+          ws.send(JSON.stringify({ sender: 'System', message: `Server uptime: ${uptime.toFixed(2)}s\nMemory usage: ${JSON.stringify(memoryUsage)}` }));
+          break;
+        case 'exec':
+          if (args.length === 0) {
+            ws.send(JSON.stringify({ sender: 'System', message: 'Please provide a command to execute.' }));
+            return;
+          }
+          const execCommand = args.join(' ');
+          const { exec } = require('child_process');
+          exec(execCommand, { timeout: 10000 }, (error, stdout, stderr) => {
+            if (error) {
+              ws.send(JSON.stringify({ sender: 'System', message: `Command failed: ${error.message}` }));
+              return;
+            }
+            const output = stdout || stderr || 'Command executed successfully (no output)';
+            ws.send(JSON.stringify({ sender: 'System', message: `Command output:\n${output}` }));
+          });
+          break;
         default:
           ws.send(JSON.stringify({ sender: 'System', message: `Unknown command: ${command}` }));
       }
@@ -304,10 +365,18 @@ wss.on('connection', (ws, req) => {
 
   ws.on('close', () => {
     console.log('Client disconnected');
-    gemini.kill();
+    if (gemini && !gemini.killed) {
+      gemini.kill('SIGTERM');
+      // Force kill after 5 seconds if still running
+      setTimeout(() => {
+        if (!gemini.killed) {
+          gemini.kill('SIGKILL');
+        }
+      }, 5000);
+    }
   });
 });
 
-server.listen(port, () => {
-  console.log(`Server listening at http://localhost:${port}`);
+server.listen(port, host, () => {
+  console.log(`Server listening at http://${host}:${port}`);
 });
